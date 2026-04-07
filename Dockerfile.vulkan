@@ -1,11 +1,17 @@
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y \
-    libvulkan1 vulkan-tools mesa-vulkan-drivers curl ca-certificates && rm -rf /var/lib/apt/lists/*
+    libvulkan1 vulkan-tools mesa-vulkan-drivers curl ca-certificates libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+
 ARG DOWNLOAD_URL
 WORKDIR /app
+
+# 直接解压
 RUN curl -L ${DOWNLOAD_URL} -o llama.tar.gz && \
-    tar -xzvf llama.tar.gz --strip-components=2 && \
+    tar -xzvf llama.tar.gz && \
     rm llama.tar.gz && \
     chmod +x *
+
 ENTRYPOINT ["./llama-server"]
