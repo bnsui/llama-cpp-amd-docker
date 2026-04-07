@@ -1,32 +1,27 @@
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装基础工具与跨平台并行计算库 libgomp1 (解决动态链接找不到库导致的 not found 错误)
 RUN apt-get update && apt-get install -y \
     wget gpg curl ca-certificates libgomp1 && \
     rm -rf /var/lib/apt/lists/*
 
-# 导入 AMD 官方源
 RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \
     wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
     gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null && \
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.1 jammy main" \
     | tee /etc/apt/sources.list.d/rocm.list
 
-# 【核心瘦身】：只安装纯运行库，拒绝 -dev 开发包！
 RUN apt-get update && apt-get install -y \
-    rocblas \
-    hipblas \
-    hipblaslt \
+    rocm-libs \
     && rm -rf /var/lib/apt/lists/*
 
 ARG DOWNLOAD_URL
 WORKDIR /app
 
-# 直接解压，不使用 strip-components
 RUN curl -L ${DOWNLOAD_URL} -o llama.tar.gz && \
-    tar -xzvf llama.tar.gz && \
+    tar -xzvf llama.tar.gz --strip-components=1 && \
     rm llama.tar.gz && \
-    chmod +x *
+    chmod +x llama-server
 
+ENV LD_LIBRARY_PATH=/app:$LD_LIBRARY_PATH
 ENTRYPOINT ["./llama-server"]

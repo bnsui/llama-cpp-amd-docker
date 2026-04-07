@@ -8,10 +8,10 @@ RUN apt-get update && apt-get install -y \
 ARG DOWNLOAD_URL
 WORKDIR /app
 
-# 直接解压
 RUN curl -L ${DOWNLOAD_URL} -o llama.tar.gz && \
-    tar -xzvf llama.tar.gz && \
+    tar -xzvf llama.tar.gz --strip-components=1 && \
     rm llama.tar.gz && \
-    chmod +x *
+    chmod +x llama-server
 
+ENV LD_LIBRARY_PATH=/app:$LD_LIBRARY_PATH
 ENTRYPOINT ["./llama-server"]
