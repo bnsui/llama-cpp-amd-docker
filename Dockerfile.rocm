@@ -1,17 +1,31 @@
 FROM ubuntu:22.04
 
-# 安装运行所需的依赖环境
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 第一步：安装必要工具
 RUN apt-get update && apt-get install -y \
-    libhipblas-dev \
-    rocblas-dev \
-    ca-certificates \
+    wget \
+    gpg \
     curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# 第二步：导入 AMD ROCm 官方密钥和 6.1 软件源
+RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \
+    wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
+    gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.1 jammy main" \
+    | tee /etc/apt/sources.list.d/rocm.list
+
+# 第三步：安装 ROCm 运行库
+RUN apt-get update && apt-get install -y \
+    rocm-libs \
     && rm -rf /var/lib/apt/lists/*
 
 ARG DOWNLOAD_URL
 WORKDIR /app
 
-# 下载官方二进制包并解压
+# 第四步：下载官方预编译二进制并解压
 RUN curl -L ${DOWNLOAD_URL} -o llama.tar.gz && \
     tar -xzvf llama.tar.gz && \
     rm llama.tar.gz && \
