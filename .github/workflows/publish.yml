@@ -1,0 +1,117 @@
+name: Auto Build llama.cpp AMD Images
+
+on:
+  schedule:
+    - cron: '0 * * * *' # 每小时运行一次
+  workflow_dispatch:      # 允许手动在网页端触发
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Fetch Latest Release Data
+        id: fetch_release
+        run: |
+          # 获取官方最新版本的 JSON 数据
+          RELEASE_JSON=$(curl -s https://api.github.com/repos/ggml-org/llama.cpp/releases/latest)
+          
+          # 解析 Tag
+          LATEST_TAG=$(echo "$RELEASE_JSON" | jq -r .tag_name)
+          
+          # 动态提取包含 ubuntu-rocm-.*-x64 和 ubuntu-vulkan-.*-x64 的下载链接，防止官方改名
+          ROCM_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("ubuntu-rocm")) | select(.name | contains("x64")) | .browser_download_url' | head -n 1)
+          VULKAN_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("ubuntu-vulkan")) | select(.name | contains("x64")) | .browser_download_url' | head -n 1)
+          
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+          echo "ROCM_URL=$ROCM_URL" >> $GITHUB_ENV
+          echo "VULKAN_URL=$VULKAN_URL" >> $GITHUB_ENV
+          
+          if [ -z "$ROCM_URL" ] || [ -z "$VULKAN_URL" ]; then
+            echo "Failed to find binary URLs."
+            exit 1
+          fi
+
+      - name: Check if already built
+        id: check_built
+        run: |
+          if [ -f .last_built_tag ] && [ "$(cat .last_built_tag)" = "${{ env.LATEST_TAG }}" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Version ${{ env.LATEST_TAG }} is already built. Skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "New version detected: ${{ env.LATEST_TAG }}"
+          fi
+
+      - name: Login to Docker Hub
+        if: steps.check_built.outputs.exists == 'false'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        if: steps.check_built.outputs.exists == 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push ROCm
+        if: steps.check_built.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.rocm
+          build-args: DOWNLOAD_URL=${{ env.ROCM_URL }}
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/llama-cpp:rocm-${{ env.LATEST_TAG }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/llama-cpp:rocm-latest
+            ghcr.io/${{ github.repository }}:rocm-${{ env.LATEST_TAG }}
+            ghcr.io/${{ github.repository }}:rocm-latest
+
+      - name: Build and Push Vulkan
+        if: steps.check_built.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.vulkan
+          build-args: DOWNLOAD_URL=${{ env.VULKAN_URL }}
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/llama-cpp:vulkan-${{ env.LATEST_TAG }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/llama-cpp:vulkan-latest
+            ghcr.io/${{ github.repository }}:vulkan-${{ env.LATEST_TAG }}
+            ghcr.io/${{ github.repository }}:vulkan-latest
+
+      - name: Record Last Built Tag
+        if: steps.check_built.outputs.exists == 'false'
+        run: |
+          echo "${{ env.LATEST_TAG }}" > .last_built_tag
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .last_built_tag
+          git commit -m "chore: record build for ${{ env.LATEST_TAG }} [skip ci]"
+          git push
+
+  # 保留最新 5 个版本 (针对 GitHub Packages)
+  cleanup-ghcr:
+    needs: check-and-build
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete old packages
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'llama-cpp-amd-docker'
+          package-type: 'container'
+          min-versions-to-keep: 5

@@ -1,0 +1,20 @@
+FROM ubuntu:22.04
+
+# 安装 Vulkan 运行依赖
+RUN apt-get update && apt-get install -y \
+    libvulkan1 \
+    vulkan-utils \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG DOWNLOAD_URL
+WORKDIR /app
+
+# 下载官方二进制包并解压
+RUN curl -L ${DOWNLOAD_URL} -o llama.tar.gz && \
+    tar -xzvf llama.tar.gz && \
+    rm llama.tar.gz && \
+    chmod +x *
+
+ENTRYPOINT ["./llama-server"]
