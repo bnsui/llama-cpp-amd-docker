@@ -1,17 +1,39 @@
-FROM ubuntu:22.04
-ENV DEBIAN_FRONTEND=noninteractive
+ARG UBUNTU_VERSION=26.04
 
-RUN apt-get update && apt-get install -y \
-    libvulkan1 vulkan-tools mesa-vulkan-drivers curl ca-certificates libgomp1 && \
-    rm -rf /var/lib/apt/lists/*
-
+# ====================================================================
+# Stage 1: Build
+# ====================================================================
+FROM ubuntu:${UBUNTU_VERSION} AS build
+RUN apt-get update && apt-get install -y curl tar ca-certificates
 ARG DOWNLOAD_URL
 WORKDIR /app
-
 RUN curl -L ${DOWNLOAD_URL} -o llama.tar.gz && \
     tar -xzvf llama.tar.gz --strip-components=1 && \
-    rm llama.tar.gz && \
     chmod +x llama-server
 
+# ====================================================================
+# Stage 2: Base
+# ====================================================================
+FROM ubuntu:${UBUNTU_VERSION} AS base
+ENV LC_ALL=C.utf8
+RUN apt-get update \
+    && apt-get install -y libvulkan1 vulkan-tools mesa-vulkan-drivers curl ca-certificates libgomp1 libcurl4 \
+    && apt-get autoremove -y \
+    && apt-get clean -y \
+    && rm -rf /tmp/* /var/tmp/* \
+    && find /var/cache/apt/archives /var/lib/apt/lists -not -name lock -type f -delete \
+    && find /var/cache -type f -delete
+
+# ====================================================================
+# Stage 3: Server
+# ====================================================================
+FROM base AS server
+ENV LLAMA_ARG_HOST=0.0.0.0
 ENV LD_LIBRARY_PATH=/app:$LD_LIBRARY_PATH
-ENTRYPOINT ["./llama-server"]
+
+WORKDIR /app
+COPY --from=build /app /app
+
+EXPOSE 8080
+HEALTHCHECK CMD [ "curl", "-f", "http://localhost:8080/health" ]
+ENTRYPOINT [ "/app/llama-server" ]
