@@ -19,8 +19,6 @@ This is an automated build project providing Docker images tailored for AMD plat
 * **Dual Versions**: Provides independent images for `ROCm` and `Vulkan`.
 * **Auto-Sync**: Checks for official releases hourly and automatically builds and pushes to both **Docker Hub** and **GitHub Container Registry (GHCR)**.
 
-## 🚀 使用方法
-镜像默认的 ENTRYPOINT 是 `llama-server`。你可以通过挂载本地模型文件并在命令后追加参数来运行。如果使用的是gpustack，只要在后台的llama.cpp中增加后端(分rocm和vulkan)版本，拉取选择latest版本即可。
 ### 🐳 Getting the Images
 You can pull the images from either Docker Hub or GHCR. The tags directly correspond to the official llama.cpp release tags (e.g., `b8683`).
 
