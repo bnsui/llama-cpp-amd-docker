@@ -12,10 +12,12 @@ RUN curl -L ${DOWNLOAD_URL} -o llama.tar.gz && \
     chmod +x llama-server
 
 # ====================================================================
-# Stage 2: Base
+# Stage 2: Base (纯净 Ubuntu 26.04 底包 + Vulkan 驱动)
 # ====================================================================
 FROM ubuntu:${UBUNTU_VERSION} AS base
+ENV DEBIAN_FRONTEND=noninteractive
 ENV LC_ALL=C.utf8
+
 RUN apt-get update \
     && apt-get install -y libvulkan1 vulkan-tools mesa-vulkan-drivers curl ca-certificates libgomp1 libcurl4 \
     && apt-get autoremove -y \

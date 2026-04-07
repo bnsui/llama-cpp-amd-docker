@@ -1,9 +1,7 @@
 ARG UBUNTU_VERSION=26.04
-ARG ROCM_VERSION=7.2.1
-ARG BASE_ROCM_DEV_CONTAINER=rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
 
 # ====================================================================
-# Stage 1: Build (平替官方的源码编译，改为直接提取二进制，极速出包)
+# Stage 1: Build (提取层)
 # ====================================================================
 FROM ubuntu:${UBUNTU_VERSION} AS build
 RUN apt-get update && apt-get install -y curl tar ca-certificates
@@ -14,12 +12,27 @@ RUN curl -L ${DOWNLOAD_URL} -o llama.tar.gz && \
     chmod +x llama-server
 
 # ====================================================================
-# Stage 2: Base (严格照搬官方的基础环境与深度清理逻辑)
+# Stage 2: Base (纯净 Ubuntu 26.04 底包 + 运行依赖)
 # ====================================================================
-FROM ${BASE_ROCM_DEV_CONTAINER} AS base
+FROM ubuntu:${UBUNTU_VERSION} AS base
+ENV DEBIAN_FRONTEND=noninteractive
 ENV LC_ALL=C.utf8
-RUN apt-get update \
-    && apt-get install -y libgomp1 curl libcurl4 \
+
+# 安装基础库
+RUN apt-get update && apt-get install -y \
+    wget gpg curl ca-certificates libgomp1 libcurl4 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 导入 AMD 源 (使用适用于 26.04 的最新源)
+RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \
+    wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
+    gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/7.2.1 noble main" \
+    | tee /etc/apt/sources.list.d/rocm.list
+
+# 安装 ROCm 运行库并清理缓存
+RUN apt-get update && apt-get install -y \
+    rocm-libs \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /tmp/* /var/tmp/* \
@@ -27,12 +40,12 @@ RUN apt-get update \
     && find /var/cache -type f -delete
 
 # ====================================================================
-# Stage 3: Server (严格照搬官方运行层)
+# Stage 3: Server (运行层)
 # ====================================================================
 FROM base AS server
 ENV LLAMA_ARG_HOST=0.0.0.0
 
-# 叠加 Strix Halo 硬件专属优化
+# Strix Halo 硬件专属优化
 ENV HSA_OVERRIDE_GFX_VERSION=11.5.1
 ENV HSA_ENABLE_SDMA=0
 ENV ROCBLAS_USE_HIPBLASLT=1
