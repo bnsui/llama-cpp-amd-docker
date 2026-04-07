@@ -1,11 +1,5 @@
 # llama.cpp AMD Docker Images (Auto-built)
 
-这是一个全自动构建的项目，旨在为 [llama.cpp](https://github.com/ggml-org/llama.cpp) 提供专用于 AMD 平台（ROCm 和 Vulkan）的 最新版 Docker 镜像。
-
-## 💡 特性
-* **极致轻量且快速**：基于官方最新 Release 预编译的二进制文件直接打包，比官方docker镜像更新快。
-* **双版本支持**：提供基于 `ROCm` 和 `Vulkan` 的两个独立镜像，可以直接用作Backend，比如：gpustack等。
-* **自动同步更新**：每小时自动检测官方发布，第一时间同步构建并推送到 GitHub Container Registry (GHCR) 和 Docker Hub。
 [English](#english) | [中文](#简体中文)
 
 ---
